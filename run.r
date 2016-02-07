@@ -134,6 +134,12 @@ oups <- which(rank(abs(qc - sd), ties="random") > nrow(x) - 3)
 text(qc[oups], sd[oups] - 1.5, names(oups))
 abline(a=0,b=1)
 
+pairs(usair_pca$scores[,1:3], ylim=c(-6,4),xlim=c(-6,4),panel=function(x,y,...) {
+    text(x,y,abbreviate(row.names(USairpollution)),
+         cex=0.6)
+    bvbox(cbind(x,y), add=TRUE)
+})
+
 #############################
 # cars data from 1979       #
 #############################
@@ -373,7 +379,7 @@ heptathlon <- heptathlon[-grep("PNG", rownames(heptathlon)),]
 score <- which(colnames(heptathlon) == "score")
 round(cor(heptathlon[,-score]),2)
 scatterplotMatrix(heptathlon[-score])
-heptathlon_pca <- prcomp(heptathlon[,-score], scale=TRUE)
+heptathlon_pca <- prcomp(heptathlon[,-score], center=TRUE, scale=TRUE)
 heptathlon_pca
 summary(heptathlon_pca)
 a1 <- heptathlon_pca$rotation[,1]
@@ -393,8 +399,10 @@ PCbiplot <- function(PC, rownames, x="PC1", y="PC2") {
     #    posted by http://stackoverflow.com/users/577462/crayola
     # PC being a prcomp object
     data <- data.frame(obsnames=rownames, PC$x)
-    plot <- ggplot(data, aes_string(x=x, y=y)) + geom_text(alpha=.4, size=3, aes(label=obsnames))
-    plot <- plot + geom_hline(alpha=0.4, size=.2, yintercept=0) + geom_vline(alpha=0.4, size=.2, xintercept=0)
+    plot <- ggplot(data, aes_string(x=x, y=y)) 
+    plot <- plot + geom_text(alpha=.4, size=3, aes(label=obsnames))
+    plot <- plot + geom_hline(alpha=0.4, size=.2, yintercept=0) 
+    plot <- plot + geom_vline(alpha=0.4, size=.2, xintercept=0)
     datapc <- data.frame(varnames=rownames(PC$rotation), PC$rotation)
     mult <- min(
         (max(data[,y]) - min(data[,y])/(max(datapc[,y])-min(datapc[,y]))),
@@ -404,8 +412,248 @@ PCbiplot <- function(PC, rownames, x="PC1", y="PC2") {
                         v1 = .7 * mult * (get(x)),
                         v2 = .7 * mult * (get(y))
     )
-    plot <- plot + coord_equal() + geom_text(data=datapc, aes(x=v1, y=v2, label=varnames), size = 5, vjust=1, color="red")
+    plot <- plot + coord_equal() 
+    plot <- plot + geom_text(data=datapc, aes(x=v1, y=v2, label=varnames), size = 5, vjust=1, color="red")
     plot <- plot + geom_segment(data=datapc, aes(x=0, y=0, xend=v1, yend=v2), arrow=arrow(length=unit(0.2,"cm")), alpha=0.75, color="red")
     plot
 }
-PCbiplot(heptathlon_pca, row.names(heptathlon))
+PCbiplot(heptathlon_pca, row.names(heptathlon), "PC1", "PC2")
+
+
+###################################
+# Canonical Correlation           #
+###################################
+# head size data is in "boot" library and is called 'frets'
+library("boot")
+rm(list=ls())
+data("frets")
+headsize <- frets
+rm(frets)
+str(headsize)
+summary(headsize)
+head(headsize)
+colnames(headsize) <- c("head1", "breadth1", "head2", "breadth2")
+#standardize the data
+headsize.std <- sweep(headsize, 2, 
+                      apply(headsize, 2, sd), FUN = "/")
+R <- cor(headsize.std)
+r11 <- R[1:2, 1:2]
+r22 <- R[-(1:2), -(1:2)]
+r12 <- R[1:2, -(1:2)]
+r21 <- R[-(1:2), (1:2)]
+(E1 <- solve(r11) %*% r12 %*% solve(r22) %*% r21)
+(E2 <- solve(r22) %*% r21 %*% solve(r11) %*% r12)
+(e1 <- eigen(E1))
+(e2 <- eigen(E2))
+girth1 <- as.matrix(headsize.std[,1:2]) %*% as.matrix(e1$vectors[,1])
+girth2 <- as.matrix(headsize.std[,3:4]) %*% as.matrix(e2$vectors[,1])
+shape1 <- as.matrix(headsize.std[,1:2]) %*% as.matrix(e1$vectors[,2])
+shape2 <- as.matrix(headsize.std[,3:4]) %*% as.matrix(e2$vectors[,2])
+(g <- cor(girth1, girth2))
+(s <- cor(shape1, shape2))
+par(mfcol=c(1,2))
+plot(girth1, girth2)
+plot(shape1, shape2)
+par(mfcol=c(1,1))
+
+# health and personality
+# ID         1 to 294                     Identification number
+# 
+# SEX        1 = Male                     Gender of participant
+# 2 = Female                 
+# 
+# AGE        Continuous                   Age in years at last birthday
+# 
+# MARITAL    1 = Never married            Marital status
+# 2 = Married                
+# 3 = Divorced               
+# 4 = Separated              
+# 5 = Widowed                
+# 
+# EDUCAT     1 = Less than high school    Education
+# 2 = Some high school       
+# 3 = Finished high school   
+# 4 = Some college           
+# 5 = Finished bachelor's    
+# degree                 
+# 6 = Finished master's      
+# degree                 
+# 7 = Finished doctorate     
+# 
+# EMPLOY     1 = Full time                Employment Status
+# 2 = Part time              
+# 3 = Unemployed             
+# 4 = Retired                
+# 5 = Houseperson            
+# 6 = In school              
+# 7 = Other                  
+# 
+# INCOME     Continuous                   Income in thousands of dollars per year
+# 
+# RELIG      1 = Protestant               Religion
+# 2 = Catholic               
+# 3 = Jewish                 
+# 4 = None                   
+# 5 = Other                  
+# 
+# C1--C20    0 = Rarely or none of the    `Please look at this card and tell me 
+# time (less than 1 day)    the number that best describes how 
+# 1 = Some or a little of       often you felt or behaved this way 
+# the time (1 or 2 days)    during the past week'. 20 items from
+# 2 = Occasionally or a         depression scale (already reflected;
+# moderate amount of the    see text Chapter 3)
+# time (3 or 4 days)     
+# 3 = Most or all of the time
+# (5 to 7 days)
+# 
+# CESD       Continuous                    Sum of C1--20 
+# 0 = lowest level possible
+# 60 = highest level possible
+# 
+# CASES      0 = Normal
+# 1 = Depressed, where 
+# depressed is CESD>=16
+# 
+# DRINK      1 = Yes                       Regular drinker? 
+# 2 = No
+# 
+# HEALTH     1 = Excellent                 General health? 
+# 2 = Good
+# 3 = Fair
+# 4 = Poor
+# 
+# REGDOC     1 = Yes                       Have a regular doctor? 
+# 2 = No
+# 
+# TREAT      1 = Yes                       Has a doctor prescribed or recommended 
+# 2 = No                        that you take medicine, medical 
+# treatments, or change your way of 
+# living in such areas as smoking, 
+# special diet, exercise, or drinking?
+# 
+# BEDDAYS    1 = Yes                       Spent entire day(s) in bed in last 
+# 0 = No                        two months?
+# 
+# ACUTEILL   1 = Yes                       Any acute illness in last two months?
+# 0 = No 
+# 
+# CHRONILL   1 = Yes                       Any chronic illness in last year?
+# 0 = No 
+
+rm(list=ls())
+data <- read.table(concat(DATA_DIR,'/Depress.txt'), header=F)
+str(data)
+summary(data)
+head(data)
+colnames(data) <- c("ID",
+                    "Gender",
+                    "Age",
+                    "MARITAL",
+                    "Edu",
+                    "EMPLOY",
+                    "Income",
+                    "RELIG",
+                    "C1",
+                    "C2",
+                    "C3",
+                    "C4",
+                    "C5",
+                    "C6",
+                    "C7",
+                    "C8",
+                    "C9",
+                    "C10",
+                    "C11",
+                    "C12",
+                    "C13",
+                    "C14",
+                    "C15",
+                    "C16",
+                    "C17",
+                    "C18",
+                    "C19",
+                    "C20",
+                    "CESD",
+                    "CASES",
+                    "DRINK",
+                    "Health",
+                    "REGDOC",
+                    "TREAT",
+                    "BEDDAYS",
+                    "ACUTEILL",
+                    "CHRONILL")
+summary(data)
+# recode Gender as 0=male, 1=female
+data$Gender <- data$Gender - 1
+summary(data)
+data <- data[c("CESD","Health","Gender","Age","Edu","Income")]
+summary(data)
+data.corr <- cor(data)
+health <- data[c("CESD","Health")]
+personality <- data[c("Gender","Age","Edu","Income")]
+load_package("CCA")
+fit <- cc(health,personality)
+# Canonical correlations
+fit$cor
+# raw canonical coefficients
+# xcoef
+fit$xcoef
+# ycoef
+fit$ycoef
+# compute the loadings
+loadings <- comput(health, personality, fit)
+# canonical loadings
+# corr.X.xscores
+loadings$corr.X.xscores
+# corr.Y.xscores
+loadings$corr.Y.xscores
+# corr.X.yscores
+loadings$corr.X.yscores
+# corr.Y.yscores
+loadings$corr.Y.yscores
+# Test the null hypothesis that the canonical correlations are all equal to zero,
+# that the second and third canonical correlations are equal to zero, and that 
+# the third canonical correlation is equal to zero. 
+ev <- (1 - fit$cor^2)
+n <- dim(health)[1]
+p <- length(health)
+q <- length(personality)
+k <- min(p,q)
+m <- n - 3/2 - (p + q) / 2
+w <- rev(cumprod(rev(ev)))
+# initialize
+d1 <- d2 <- f <- vector("numeric", k)
+for (i in 1:k) {
+    s <- sqrt((p^2 * q^2 - 4)/(p^2 + q^2- 5))
+    si <- 1/s
+    d1[i] <- p * q
+    d2[i] <- m * s - p * q/2 + 1
+    r <- (1 - w[i]^si)/w[i]^si
+    f[i] <- r * d2[i]/d1[i]
+    p <- p - 1
+    q <- q - 1
+}
+pv <- pf(f, d1, d2, lower.tail = FALSE)
+# canonical dimensions test
+(dmat <- cbind(WilksL = w, F = f, df1 = d1, df2 = d2, p = pv))
+# calculate the standardized health canonical coefficients diagonal matrix of health sd's
+(s1 <- diag(sqrt(diag(cov(health)))))
+# calculate the standardized personality canonical coefficients diagonal matrix of personality sd's
+(s2 <- diag(sqrt(diag(cov(personality)))))
+
+# the way the book does it
+r11 <- data.corr[1:2, 1:2]
+r22 <- data.corr[-(1:2), -(1:2)]
+r12 <- data.corr[1:2, -(1:2)]
+r21 <- data.corr[-(1:2), 1:2]
+(E1 <- solve(r11) %*% r12 %*% solve(r22) %*% r21)
+(E2 <- solve(r22) %*% r21 %*% solve(r11) %*% r12)
+(e1 <- eigen(E1))
+(e2 <- eigen(E2))
+# canonical correlations
+(cc1 <- round(sqrt(e1$values),3))
+# loadings
+(health.loadings <- round(as.double(e1$vectors[,1]),2))
+(personality.loadings <- round(as.double(e2$vectors[,1]),2))
+# u1 = 0.45 CEST - 0.89 Health
+# v1 = -0.03 Gender - 0.91 Age + 0.40 Education - 0.09 Income
